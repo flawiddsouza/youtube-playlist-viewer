@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>YouTube Playlist Viewer</title>
+        <meta charset='utf-8' />
+        <style>
+            .youtube-item {
+                display: inline-block;
+                padding: 1em;
+            }
+            .youtube-item div {
+                max-width: 20em;
+            }
+            .youtube-item p {
+                margin: 0;
+            }
+            #playlist, #load, #load-more, #end-marker {
+                display: none;
+            }
+        </style>
+    </head>
+    <body>
+        <button id="authorize-button" style="display: none;">Authorize</button>
+        <button id="signout-button" style="display: none;">Sign Out</button>
+        <br>
+        <select id="playlist"></select>
+        <button id="load">Load</button>
+
+        <div id="content"></div>
+
+        <button id="load-more">Load More...</button>
+        <div id="end-marker">End of page</div>
+
+        <script type="text/javascript">
+            var discoveryDocs = ["https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest"]
+            var clientId = '528444993088-d93tu46bfv0o60aj9nqj1sq9bn6p7qmr.apps.googleusercontent.com'
+            var scopes = 'https://www.googleapis.com/auth/youtube'
+
+            var authorizeButton = document.getElementById('authorize-button')
+            var signoutButton = document.getElementById('signout-button')
+            var playlistSelector = document.getElementById('playlist')
+            var loadButton = document.getElementById('load')
+            var contentDiv = document.getElementById('content')
+            var loadMoreButton = document.getElementById('load-more')
+            var endMarker = document.getElementById('end-marker')
+
+            var userPlaylists = {}
+            var allPlaylistItems = [] // this is a required temp variable
+
+
+            function handleClientLoad() {
+                gapi.load('client:auth2', initClient)
+            }
+
+            function initClient() {
+                gapi.client.init({
+                        discoveryDocs: discoveryDocs,
+                        clientId: clientId,
+                        scope: scopes
+                }).then(function () {
+                    // Listen for sign-in state changes.
+                    gapi.auth2.getAuthInstance().isSignedIn.listen(updateSigninStatus)
+
+                    // Handle the initial sign-in state.
+                    updateSigninStatus(gapi.auth2.getAuthInstance().isSignedIn.get())
+
+                    authorizeButton.onclick = handleAuthClick
+                    signoutButton.onclick = handleSignoutClick
+                });
+            }
+
+            function updateSigninStatus(isSignedIn) {
+                if (isSignedIn) {
+                    authorizeButton.style.display = 'none'
+                    signoutButton.style.display = 'block'
+                    playlistSelector.style.display = 'inline-block'
+                    loadButton.style.display = 'inline-block'
+                    getDefaultPlaylists()
+                    getAllCreatedPlaylists()
+                } else {
+                    authorizeButton.style.display = 'block'
+                    signoutButton.style.display = 'none'
+                }
+            }
+
+            function handleAuthClick(event) {
+                gapi.auth2.getAuthInstance().signIn()
+            }
+
+            function handleSignoutClick(event) {
+                gapi.auth2.getAuthInstance().signOut()
+            }
+
+            function getDefaultPlaylists() {
+                gapi.client.youtube.channels.list({
+                    part: "contentDetails",
+                    mine: true,
+                    fields: "items/contentDetails"
+                }).then(function(response) {
+                    userPlaylists = response.result.items[0].contentDetails.relatedPlaylists
+                })
+            }
+
+            function getAllCreatedPlaylists(nextPageToken = "") {
+                gapi.client.youtube.playlists.list({
+                    part: "snippet",
+                    mine: true,
+                    maxResults: 50,
+                    pageToken: nextPageToken,
+                    fields: "items/snippet/title,items/id, nextPageToken"
+                }).then(function(response) {
+                    response.result.items.forEach(function(item) {
+                        userPlaylists[item.snippet.title] = item.id
+                    })
+                    if("nextPageToken" in response.result) {
+                        getAllCreatedPlaylists(response.result.nextPageToken)
+                    } else {
+                        // populate playlist selector
+                        var fragment = document.createDocumentFragment()
+                        for(playlistKey in userPlaylists) {
+                            var opt = document.createElement('option')
+                            opt.innerHTML = playlistKey;
+                            opt.value = userPlaylists[playlistKey];
+                            fragment.appendChild(opt);
+                        }
+                        playlistSelector.appendChild(fragment);
+                    }
+                })
+            }
+
+            function getAllPlaylistItems(playlistId, nextPageToken = "") { // this creates a request every 50 videos in a playlist, till it reaches the end of it
+                gapi.client.youtube.playlistItems.list({
+                    part: "snippet",
+                    playlistId: playlistId,
+                    maxResults: 50,
+                    pageToken: nextPageToken,
+                    fields: "nextPageToken, items/snippet/resourceId/videoId, items/snippet/thumbnails/medium/url, items/snippet/title, items/snippet/publishedAt"
+                }).then(function(response) {
+                    response.result.items.forEach(function(item) {
+                        allPlaylistItems.push(item)
+                    })
+                    if("nextPageToken" in response.result) {
+                        getAllPlaylistItems(playlistId, response.result.nextPageToken)
+                    }
+                })
+            }
+
+            function get50PlaylistItems(playlistId, nextPageToken = "") {
+                return new Promise(function(resolve) {
+                    gapi.client.youtube.playlistItems.list({
+                        part: "snippet",
+                        playlistId: playlistId,
+                        maxResults: 50,
+                        pageToken: nextPageToken,
+                        fields: "nextPageToken, items/snippet/resourceId/videoId, items/snippet/thumbnails/medium/url, items/snippet/title, items/snippet/publishedAt"
+                    }).then(function(response) {
+                        resolve(response.result)
+                    })
+                })
+            }
+
+            loadButton.addEventListener('click', function() {
+                var playlistID = playlistSelector.options[playlistSelector.selectedIndex].value
+                get50PlaylistItems(playlistID).then(function(response) {
+                    contentDiv.innerHTML = ""
+                    response.items.forEach(function(item) {
+                        if(item.snippet.title != "Deleted video") {
+                            contentDiv.innerHTML += 
+                            `<div class="youtube-item">
+                                <a href="https://www.youtube.com/watch?v=${item.snippet.resourceId.videoId}">
+                                    <img src="${item.snippet.thumbnails.medium.url}">
+                                </a>
+                                <div>
+                                    <a href="https://www.youtube.com/watch?v=${item.snippet.resourceId.videoId}">
+                                        ${item.snippet.title}
+                                    </a>
+                                    <p>Liked on ${moment(item.snippet.publishedAt).format('DD-MMM-YY h:mm:ss A')}</p>
+                                </div>
+                            </div>`
+                        }
+                    })
+                    if("nextPageToken" in response) {
+                        endMarker.style.display = "none"
+                        loadMoreButton.dataset.nextPageToken = response.nextPageToken
+                        loadMoreButton.dataset.playlistId = playlistID
+                        loadMoreButton.style.display = "block"
+                    } else {
+                        loadMoreButton.style.display = "none"
+                        endMarker.style.display = "block"
+                    }
+                })
+            })
+
+            loadMoreButton.addEventListener('click', function() {
+                get50PlaylistItems(loadMoreButton.dataset.playlistId, loadMoreButton.dataset.nextPageToken).then(function(response) {
+                    response.items.forEach(function(item) {
+                        if(item.snippet.title != "Deleted video") {
+                            contentDiv.innerHTML += 
+                            `<div class="youtube-item">
+                                <a href="https://www.youtube.com/watch?v=${item.snippet.resourceId.videoId}">
+                                    <img src="${item.snippet.thumbnails.medium.url}">
+                                </a>
+                                <div>
+                                    <a href="https://www.youtube.com/watch?v=${item.snippet.resourceId.videoId}">
+                                        ${item.snippet.title}
+                                    </a>
+                                    <p>Liked on ${moment(item.snippet.publishedAt).format('DD-MMM-YY h:mm:ss A')}</p>
+                                </div>
+                            </div>`
+                        }
+                    })
+                    if("nextPageToken" in response) {
+                        endMarker.style.display = "none"
+                        loadMoreButton.dataset.nextPageToken = response.nextPageToken
+                        loadMoreButton.dataset.playlistId = playlistID
+                        loadMoreButton.style.display = "block"
+                    } else {
+                        loadMoreButton.style.display = "none"
+                        endMarker.style.display = "block"
+                    }
+                })
+            })
+        </script>
+        <script async defer src="https://apis.google.com/js/api.js" 
+            onload="this.onload=function(){};handleClientLoad()" 
+            onreadystatechange="if (this.readyState === 'complete') this.onload()">
+        </script>
+        <script src="moment.min.js"></script>
+    </body>
+</html>
