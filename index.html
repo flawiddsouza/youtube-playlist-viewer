@@ -57,7 +57,7 @@
                         discoveryDocs: discoveryDocs,
                         clientId: clientId,
                         scope: scopes
-                }).then(function () {
+                }).then(() => {
                     // Listen for sign-in state changes.
                     gapi.auth2.getAuthInstance().isSignedIn.listen(updateSigninStatus)
 
@@ -96,7 +96,7 @@
                     part: "contentDetails",
                     mine: true,
                     fields: "items/contentDetails"
-                }).then(function(response) {
+                }).then((response) => {
                     userPlaylists = response.result.items[0].contentDetails.relatedPlaylists
                 })
             }
@@ -108,8 +108,8 @@
                     maxResults: 50,
                     pageToken: nextPageToken,
                     fields: "items/snippet/title,items/id, nextPageToken"
-                }).then(function(response) {
-                    response.result.items.forEach(function(item) {
+                }).then((response) => {
+                    response.result.items.forEach((item) => {
                         userPlaylists[item.snippet.title] = item.id
                     })
                     if("nextPageToken" in response.result) {
@@ -135,8 +135,8 @@
                     maxResults: 50,
                     pageToken: nextPageToken,
                     fields: "nextPageToken, items/snippet/resourceId/videoId, items/snippet/thumbnails/medium/url, items/snippet/title, items/snippet/publishedAt"
-                }).then(function(response) {
-                    response.result.items.forEach(function(item) {
+                }).then((response) => {
+                    response.result.items.forEach((item) => {
                         allPlaylistItems.push(item)
                     })
                     if("nextPageToken" in response.result) {
@@ -146,24 +146,24 @@
             }
 
             function get50PlaylistItems(playlistId, nextPageToken = "") {
-                return new Promise(function(resolve) {
+                return new Promise((resolve) => {
                     gapi.client.youtube.playlistItems.list({
                         part: "snippet",
                         playlistId: playlistId,
                         maxResults: 50,
                         pageToken: nextPageToken,
                         fields: "nextPageToken, items/snippet/resourceId/videoId, items/snippet/thumbnails/medium/url, items/snippet/title, items/snippet/publishedAt"
-                    }).then(function(response) {
+                    }).then((response) => {
                         resolve(response.result)
                     })
                 })
             }
 
-            loadButton.addEventListener('click', function() {
+            loadButton.addEventListener('click', () => {
                 var playlistID = playlistSelector.options[playlistSelector.selectedIndex].value
-                get50PlaylistItems(playlistID).then(function(response) {
+                get50PlaylistItems(playlistID).then((response) => {
                     contentDiv.innerHTML = ""
-                    response.items.forEach(function(item) {
+                    response.items.forEach((item) => {
                         if(item.snippet.title != "Deleted video") {
                             contentDiv.innerHTML += 
                             `<div class="youtube-item">
@@ -191,9 +191,9 @@
                 })
             })
 
-            loadMoreButton.addEventListener('click', function() {
-                get50PlaylistItems(loadMoreButton.dataset.playlistId, loadMoreButton.dataset.nextPageToken).then(function(response) {
-                    response.items.forEach(function(item) {
+            loadMoreButton.addEventListener('click', () => {
+                get50PlaylistItems(loadMoreButton.dataset.playlistId, loadMoreButton.dataset.nextPageToken).then((response) => {
+                    response.items.forEach((item) => {
                         if(item.snippet.title != "Deleted video") {
                             contentDiv.innerHTML += 
                             `<div class="youtube-item">
